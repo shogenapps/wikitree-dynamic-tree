@@ -35,7 +35,7 @@ window.Surnames = class Surnames {
         // TODO: We should quit searching for ancestors if all of the current step are "unknown".
         // TODO: It might be nice to start with a small number here and have a "Get more" button that continues.
         // Note the original page (e.g. https://www.wikitree.com/treewidget/Adams-35/10) went to 6 generations.
-        this.maxGeneration = 6;
+        this.maxGeneration = 10;
 
         // Track surnames already seen
         this.surnamesSeen = new Array();
@@ -57,6 +57,7 @@ window.Surnames = class Surnames {
     async displaySurnames() {
         wtViewRegistry.showNotice(`Gathering surnames from ancestors to ${this.maxGeneration} generations...`);
 
+        /*
         let data = await WikiTreeAPI.postToAPI({
             appId: SurnamesView.APP_ID,
             action: "getPerson",
@@ -67,6 +68,7 @@ window.Surnames = class Surnames {
             wtViewRegistry.showError(`There was an error starting with ${this.startId}.`);
             return;
         }
+        
 
         // Yay, we have a valid starting person.
         // If the profile is private and the viewing user is not on the Trusted List, we still might not be able to continue.
@@ -90,28 +92,50 @@ window.Surnames = class Surnames {
             return;
         }
 
+        */
+
         // Now clear out our tree view and start filling it.
-        $(this.selector).html(`<div id="surnamesList"></div>`);
+        // $(this.selector).html(`<div id="surnamesList"></div>`);
 
-        let x = p.Name.split("-");
-        let count = x[x.length - 1];
+        //        let x = p.Name.split("-");
+        //       let count = x[x.length - 1];
 
-        let html = `<p>Here are the last names from <a href="https://www.wikitree.com/wiki/${p.Name}">${p.RealName} ${p.LastNameCurrent}</a>'s <a href="https://wikitree.com/genealogy/${p.LastNameAtBirth}-Family-Tree-${count}">family tree</a>.`;
-        if (p.Privacy >= 35) {
+        // let html = `<p>Here are the last names from <a href="https://www.wikitree.com/wiki/${p.Name}">${p.RealName} ${p.LastNameCurrent}</a>'s <a href="https://wikitree.com/genealogy/${p.LastNameAtBirth}-Family-Tree-${count}">family tree</a>.`;
+        /*
+       if (p.Privacy >= 35) {
             html += `<br /><span class="small">This page is made for sharing, especially with <a href="https://www.wikitree.com/wiki/DNA_Matches" target="_Help" title="Information on DNA match sharing features">DNA matches</a>: https://www.WikiTree.com/treewidget/${p.Name}/10</span>`;
         }
         html += `</p>`;
-        $("#view-description").html(html);
+        */
+        // $("#view-description").html(html);
 
         // Get all of our ancestors in one swoop using getPeople.
         await this.getAncestors();
-
+        console.log(this.people);
+        // this.people is an object with keys being the profile IDs.
+        // Build Ahnentafel list
+        // this.startId is Name, not Id.  Need to find the person with this Name.
+        console.log(this.startId);
+        let startPerson = this.people[this.startId];
+        if (!startPerson) {
+            if (this.startId.indexOf("-") > 0) {
+                startPerson = Object.values(this.people).find((person) => person.Name == this.startId);
+            }
+        }
+        console.log(startPerson);
+        const ahnentafel = this.buildAhnentafelList(this.startId);
+        console.log(ahnentafel);
 
         // Add our starting profile.
+        const p = this.people[this.startId];
+        let firstSurname = p?.LastNameAtBirth;
+        if (!firstSurname) {
+            firstSurname = this.startId.replace("-.*", "");
+        }
         $("#surnamesList").append(
-            `<div class="generationRow"><div class="surnameItem gen0 newSurname"><a href="https://www.wikitree.com/wiki/${p.Name}">${p.LastNameAtBirth}</a></div></div>`
+            `<div class="generationRow"><div class="surnameItem gen0 newSurname"><a href="https://www.wikitree.com/wiki/${this.startId}">${firstSurname}</a></div></div>`
         );
-        this.surnamesSeen.push(p.LastNameAtBirth);
+        this.surnamesSeen.push(firstSurname);
 
         // Add ancestor profiles recursively to our display.
         let paternal = new Array();
@@ -132,10 +156,38 @@ window.Surnames = class Surnames {
             action: "getPeople",
             keys: this.startId,
             fields: this.profileFields,
-            ancestors: this.maxGeneration
+            ancestors: this.maxGeneration,
         });
-        this.people = new Array();
         this.people = data[0].people;
+    }
+
+    buildAhnentafelList(startId, currentNumber = 1, table = {}) {
+        const data = this.people;
+        const person = data[startId];
+        if (!person) {
+            return; // Person not found, exit condition for the recursion
+        }
+
+        // Add the current person to the Ahnentafel list
+        table[currentNumber] = {
+            id: startId,
+            name: `${person.FirstName} ${person.LastNameAtBirth}`,
+            number: currentNumber,
+        };
+
+        // Recursively add the father
+        if (person.Father && person.Father !== -1) {
+            // Assuming -1 means unknown
+            this.buildAhnentafelList(person.Father.toString(), currentNumber * 2, table);
+        }
+
+        // Recursively add the mother
+        if (person.Mother && person.Mother !== -1) {
+            // Assuming -1 means unknown
+            this.buildAhnentafelList(person.Mother.toString(), currentNumber * 2 + 1, table);
+        }
+
+        return table;
     }
 
     // This is a recursive function listing all of the surnames for the given set of people/ancestors, and then
