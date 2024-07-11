@@ -640,6 +640,8 @@ window.AhnentafelAncestorList = class AhnentafelAncestorList {
         });
 
         this.refreshAncestorList();
+
+        console.log("this.Ancestors", this.ancestors);
     }
 
     displayGeneration(generationNumber) {
@@ -1459,3 +1461,74 @@ window.AhnentafelAncestorList = class AhnentafelAncestorList {
         });
     }
 };
+
+function ahnentafelExcelOut() {
+    rows = [];
+    visited = new Set();
+    // Initial call on root li
+    const rootLi = document.querySelector("li#primaryPerson");
+    processLi(rootLi, 0);
+
+    function makeFilename() {
+        return makeSheetname() + "_" + new Date().toISOString().replace("T", "_").replaceAll(":", "-").slice(0, 19);
+    }
+
+    function makeSheetname() {
+        const person_id = $("#wt-id-text").val();
+        let sheetName = `Descendants_of_${person_id}`;
+        return sheetName;
+    }
+
+    const sheetName = makeSheetname();
+
+    const wb = XLSX.utils.book_new();
+    wb.Props = {
+        Title: sheetName,
+        Subject: sheetName,
+        Author: "WikiTree",
+        CreatedDate: new Date(),
+    };
+    wb.SheetNames.push(sheetName);
+    const ws_data = [];
+    const headings = ["Aboville", "ID", "Name", "Birth Date", "Birth Place", "Death Date", "Death Place", "Spouses"];
+    ws_data.push(headings, []);
+    rows.forEach((row) => {
+        let data = [
+            row.aboville,
+            row.wtid,
+            row.name,
+            row.birthDate,
+            row.birthPlace,
+            row.deathDate,
+            row.deathPlace,
+            row.spouseText,
+        ];
+        ws_data.push(data);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    wb.Sheets[sheetName] = ws;
+
+    function s2ab(s) {
+        const buf = new ArrayBuffer(s.length);
+        const view = new Uint8Array(buf);
+        for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xff;
+        return buf;
+    }
+
+    const wscols = [
+        { wch: 8 },
+        { wch: 20 },
+        { wch: 30 },
+        { wch: 20 },
+        { wch: 60 },
+        { wch: 20 },
+        { wch: 60 },
+        { wch: 70 },
+    ];
+
+    ws["!cols"] = wscols;
+
+    var wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary" });
+    saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), makeFilename() + ".xlsx");
+}
